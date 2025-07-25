@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
 
 class GetStartedPage extends StatefulWidget {
   const GetStartedPage({super.key});
@@ -25,10 +27,43 @@ class _GetStartedPageState extends State<GetStartedPage> {
     super.dispose();
   }
 
-  void _handleSignUp() {
+  Future<void> _handleSignUp() async {
     if (_formKey.currentState!.validate()) {
-      // TODO: Implement sign up logic
-      Navigator.pushReplacementNamed(context, '/home');
+      try {
+        final credential =
+            await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+
+        if (credential.user != null) {
+          // Update the user's display name
+          await credential.user!.updateDisplayName(_nameController.text.trim());
+
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, '/home');
+          }
+        }
+      } on FirebaseAuthException catch (e) {
+        String message = 'An error occurred during sign up';
+        if (e.code == 'weak-password') {
+          message = 'The password provided is too weak';
+        } else if (e.code == 'email-already-in-use') {
+          message = 'An account already exists for this email';
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('An error occurred during sign up')),
+          );
+        }
+      }
     }
   }
 
@@ -50,8 +85,8 @@ class _GetStartedPageState extends State<GetStartedPage> {
                   Image.asset(
                     'images/elimtrust.png',
                     height: 100,
-                   // color: Colors.blue.shade700,
-                   // colorBlendMode: BlendMode.srcIn,
+                    // color: Colors.blue.shade700,
+                    // colorBlendMode: BlendMode.srcIn,
                   ),
                   const SizedBox(height: 32),
                   Text(

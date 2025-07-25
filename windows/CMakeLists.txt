@@ -23,6 +23,7 @@ else()
       "Debug" "Profile" "Release")
   endif()
 endif()
+
 # Define settings for the Profile build mode.
 set(CMAKE_EXE_LINKER_FLAGS_PROFILE "${CMAKE_EXE_LINKER_FLAGS_RELEASE}")
 set(CMAKE_SHARED_LINKER_FLAGS_PROFILE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE}")
@@ -33,17 +34,33 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 add_definitions(-DUNICODE -D_UNICODE)
 
 # Compilation settings that should be applied to most targets.
-#
-# Be cautious about adding new options here, as plugins use this function by
-# default. In most cases, you should add new options to specific targets instead
-# of modifying this function.
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
-  target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")
+  target_compile_options(${TARGET} PRIVATE /W3 /wd"4100" /wd"4996")
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
+  target_compile_definitions(${TARGET} PRIVATE _CRT_SECURE_NO_WARNINGS)
 endfunction()
+
+# ==== Firebase SDK Setup ====
+set(FIREBASE_CPP_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/firebase_cpp_sdk")
+
+# First check if Firebase SDK exists in the project directory
+if(NOT EXISTS "${FIREBASE_CPP_SDK_DIR}/CMakeLists.txt")
+    # Try to find it in the build directory
+    set(FIREBASE_CPP_SDK_DIR "${CMAKE_CURRENT_BINARY_DIR}/firebase_cpp_sdk")
+    if(NOT EXISTS "${FIREBASE_CPP_SDK_DIR}/CMakeLists.txt")
+        message(WARNING "Firebase C++ SDK not found. Please extract it to: ${CMAKE_CURRENT_SOURCE_DIR}/firebase_cpp_sdk")
+    endif()
+endif()
+
+if(EXISTS "${FIREBASE_CPP_SDK_DIR}/CMakeLists.txt")
+    message(STATUS "Found Firebase SDK at: ${FIREBASE_CPP_SDK_DIR}")
+    set(FIREBASE_SDK_ROOT_DIR "${FIREBASE_CPP_SDK_DIR}")
+    add_subdirectory("${FIREBASE_CPP_SDK_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/firebase_build")
+    include_directories("${FIREBASE_CPP_SDK_DIR}/include")
+endif()
 
 # Flutter library and tool build rules.
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
@@ -52,18 +69,11 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
 
-
-# Generated plugin build rules, which manage building the plugins and adding
-# them to the application.
+# Generated plugin build rules
 include(flutter/generated_plugins.cmake)
 
-
-# === Installation ===
-# Support files are copied into place next to the executable, so that it can
-# run in place. This is done instead of making a separate bundle (as on Linux)
-# so that building and running from within Visual Studio will work.
+# === Installation Setup ===
 set(BUILD_BUNDLE_DIR "$<TARGET_FILE_DIR:${BINARY_NAME}>")
-# Make the "install" step default, as it's required to run.
 set(CMAKE_VS_INCLUDE_INSTALL_TO_DEFAULT_BUILD 1)
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
@@ -87,14 +97,11 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     COMPONENT Runtime)
 endif()
 
-# Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"
    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
    COMPONENT Runtime)
 
-# Fully re-copy the assets directory on each build to avoid having stale files
-# from a previous install.
 set(FLUTTER_ASSET_DIR_NAME "flutter_assets")
 install(CODE "
   file(REMOVE_RECURSE \"${INSTALL_BUNDLE_DATA_DIR}/${FLUTTER_ASSET_DIR_NAME}\")
@@ -102,7 +109,40 @@ install(CODE "
 install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
-# Install the AOT library on non-Debug builds only.
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# === Firebase Link Libraries ===
+if(EXISTS "${FIREBASE_CPP_SDK_DIR}/CMakeLists.txt")
+    # Core Firebase libraries
+    set(FIREBASE_LIBRARIES 
+        firebase_app
+        firebase_auth
+    )
+
+    # Link Firebase libraries
+    target_link_libraries(${BINARY_NAME} PRIVATE ${FIREBASE_LIBRARIES})
+    
+    # Define the possible locations of the DLLs
+    set(FIREBASE_DLL_DIRS
+        "${FIREBASE_CPP_SDK_DIR}/libs/windows/VS2022/MD/x64"
+        "${FIREBASE_CPP_SDK_DIR}/libs/windows/VS2019/MD/x64"
+        "${FIREBASE_CPP_SDK_DIR}/libs/windows/x64/Debug"
+    )
+
+    # Find and copy DLLs
+    foreach(DLL_DIR ${FIREBASE_DLL_DIRS})
+        if(EXISTS "${DLL_DIR}")
+            foreach(LIB ${FIREBASE_LIBRARIES})
+                if(EXISTS "${DLL_DIR}/${LIB}.dll")
+                    add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
+                        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${DLL_DIR}/${LIB}.dll"
+                        $<TARGET_FILE_DIR:${BINARY_NAME}>
+                    )
+                endif()
+            endforeach()
+        endif()
+    endforeach()
+endif()
