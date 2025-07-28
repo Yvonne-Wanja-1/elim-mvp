@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -25,11 +27,17 @@ class _SignInPageState extends State<SignInPage> {
     });
 
     try {
-      // TODO: Implement Google Sign In
-      await Future.delayed(
-          const Duration(seconds: 2)); // Simulating network request
-      // final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      // if (googleUser == null) return;
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return;
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential = 
+          await FirebaseAuth.instance.signInWithCredential(credential);
 
       // final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       // Handle authentication result
@@ -98,10 +106,42 @@ class _SignInPageState extends State<SignInPage> {
         _isLoading = true;
       });
 
-      // TODO: Implement sign in logic
-      // This is where you would call your authentication service.
-      // For demonstration, we'll just add a delay.
-      await Future.delayed(const Duration(seconds: 2));
+      try {
+        final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+        
+        if (credential.user != null) {
+          // Successfully signed in
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, '/home');
+          }
+        }
+      } on FirebaseAuthException catch (e) {
+        String errorMessage = 'An error occurred';
+        if (e.code == 'user-not-found') {
+          errorMessage = 'No user found for that email';
+        } else if (e.code == 'wrong-password') {
+          errorMessage = 'Wrong password provided';
+        } else if (e.code == 'invalid-email') {
+          errorMessage = 'The email address is not valid';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
 
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/home');
