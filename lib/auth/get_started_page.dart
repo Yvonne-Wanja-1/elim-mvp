@@ -45,24 +45,6 @@ class _GetStartedPageState extends State<GetStartedPage> {
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      // Check if user exists with this email
-      final signInMethods = await FirebaseAuth.instance
-          .fetchSignInMethodsForEmail(googleUser.email);
-
-      if (signInMethods.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'No account exists with this email. Please create an account first.'),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        return;
-      }
-
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
