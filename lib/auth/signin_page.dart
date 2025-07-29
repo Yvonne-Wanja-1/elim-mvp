@@ -30,13 +30,14 @@ class _SignInPageState extends State<SignInPage> {
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) return;
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      final UserCredential userCredential = 
+      final UserCredential userCredential =
           await FirebaseAuth.instance.signInWithCredential(credential);
 
       // final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
@@ -107,11 +108,12 @@ class _SignInPageState extends State<SignInPage> {
       });
 
       try {
-        final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        final credential =
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-        
+
         if (credential.user != null) {
           // Successfully signed in
           if (mounted) {
@@ -120,35 +122,76 @@ class _SignInPageState extends State<SignInPage> {
         }
       } on FirebaseAuthException catch (e) {
         String errorMessage = 'An error occurred';
-        if (e.code == 'user-not-found') {
-          errorMessage = 'No user found for that email';
-        } else if (e.code == 'wrong-password') {
-          errorMessage = 'Wrong password provided';
-        } else if (e.code == 'invalid-email') {
-          errorMessage = 'The email address is not valid';
-        }
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-          ),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+        String actionMessage = '';
+        Color backgroundColor = Colors.red.shade700;
 
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
+        if (e.code == 'user-not-found') {
+          errorMessage = '⚠️ Account Not Found';
+          actionMessage =
+              'It looks like you don\'t have an account yet. Would you like to create one?';
+          backgroundColor = Colors.blue.shade700;
+        } else if (e.code == 'wrong-password') {
+          errorMessage = '🔐 Incorrect Password';
+          actionMessage = 'Please check your password and try again.';
+        } else if (e.code == 'invalid-email') {
+          errorMessage = '📧 Invalid Email';
+          actionMessage = 'Please enter a valid email address.';
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    errorMessage,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (actionMessage.isNotEmpty) const SizedBox(height: 4),
+                  if (actionMessage.isNotEmpty)
+                    Text(
+                      actionMessage,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                ],
+              ),
+              backgroundColor: backgroundColor,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
+              action: e.code == 'user-not-found'
+                  ? SnackBarAction(
+                      label: 'Create Account',
+                      textColor: Colors.white,
+                      onPressed: () {
+                        Navigator.pushReplacementNamed(context, '/get-started');
+                      },
+                    )
+                  : null,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString()}'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
-      setState(() {
-        _isLoading = false;
-      });
     }
   }
 
@@ -170,7 +213,7 @@ class _SignInPageState extends State<SignInPage> {
                   Image.asset(
                     'images/elimtrust.png',
                     height: 100,
-                 //   color: Colors.blue.shade700,
+                    //   color: Colors.blue.shade700,
                     colorBlendMode: BlendMode.srcIn,
                   ),
                   const SizedBox(height: 32),
@@ -371,7 +414,8 @@ class _SignInPageState extends State<SignInPage> {
                       ),
                       TextButton(
                         onPressed: () {
-                          Navigator.pushReplacementNamed(context, '/get-started');
+                          Navigator.pushReplacementNamed(
+                              context, '/get-started');
                         },
                         child: Text(
                           'Get Started',
