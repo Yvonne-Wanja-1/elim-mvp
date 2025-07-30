@@ -1,38 +1,42 @@
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:elim_trust_2/services/auth_service.dart';
 
 class ProjectsPage extends StatefulWidget {
-  
-  
   const ProjectsPage({super.key});
 
   @override
   State<ProjectsPage> createState() => _MyWidgetState();
-
-
-
-
-  
 }
 
 class _MyWidgetState extends State<ProjectsPage> with TickerProviderStateMixin {
-  // Fix: Changed to TickerProviderStateMixin as multiple AnimationControllers are used.
-  // Fix: Consolidated state variables from the nested class.
-  // Fix: Initial _selectedIndex for ProjectsPage should be 0.
   bool isOngoingSelected = true;
-  int _selectedIndex = 0; 
-  late AnimationController _titleFadeSlideAnimationController; // For the title fade/slide animation
+  int _selectedIndex = 0;
+  late AnimationController _titleFadeSlideAnimationController;
   late Animation<Offset> _slideAnimation;
-  late AnimationController _titleScaleAnimationController; // For the title scale animation
+  late AnimationController _titleScaleAnimationController;
   late Animation<double> _scaleAnimation;
-  late AnimationController _menuIconFeedbackController; // For menu icon rotation
+  late AnimationController _menuIconFeedbackController;
   late Animation<double> _menuIconRotationAnimation;
-  String? _lastSelectedMenuItemValue; // To store the value of the last tapped menu item
+  String? _lastSelectedMenuItemValue;
+
+  final AuthService _authService = AuthService();
+  bool _isSignedIn = false;
 
   @override
   void initState() {
     super.initState();
+
+    // Initialize auth state
+    _isSignedIn = _authService.isSignedIn;
+
+    // Listen to auth state changes
+    _authService.authStateChanges.listen((user) {
+      setState(() {
+        _isSignedIn = user != null;
+      });
+    });
 
     // Initialize for title fade/slide animation (from original _MyWidgetState)
     _titleFadeSlideAnimationController = AnimationController(
@@ -43,7 +47,8 @@ class _MyWidgetState extends State<ProjectsPage> with TickerProviderStateMixin {
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.3),
       end: Offset.zero,
-    ).animate(CurvedAnimation( // Fix: Use _titleFadeSlideAnimationController
+    ).animate(CurvedAnimation(
+      // Fix: Use _titleFadeSlideAnimationController
       parent: _titleFadeSlideAnimationController,
       curve: Curves.easeInOut,
     ));
@@ -55,15 +60,18 @@ class _MyWidgetState extends State<ProjectsPage> with TickerProviderStateMixin {
     )..repeat(reverse: true); // Makes the animation loop back and forth
 
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.29).animate(
-        CurvedAnimation(parent: _titleScaleAnimationController, curve: Curves.easeInOut));
+        CurvedAnimation(
+            parent: _titleScaleAnimationController, curve: Curves.easeInOut));
 
     // Initialize for menu icon rotation (from duplicated _ProjectsPageState)
     _menuIconFeedbackController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400), // Duration for the rotation
     );
-    _menuIconRotationAnimation = Tween<double>(begin: 0.0, end: 1.0).animate( // 0.0 to 1.0 for a full 360-degree turn
-      CurvedAnimation(parent: _menuIconFeedbackController, curve: Curves.easeInOut),
+    _menuIconRotationAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      // 0.0 to 1.0 for a full 360-degree turn
+      CurvedAnimation(
+          parent: _menuIconFeedbackController, curve: Curves.easeInOut),
     );
   }
 
@@ -74,16 +82,26 @@ class _MyWidgetState extends State<ProjectsPage> with TickerProviderStateMixin {
     _menuIconFeedbackController.dispose(); // Fix: Dispose the new controller
     super.dispose();
   }
-  void _handleMenuSelection(String value) {
+
+  Future<void> _handleMenuSelection(String value) async {
     // Trigger the rotation feedback animation for the menu icon
     _menuIconFeedbackController.forward(from: 0.0);
 
     switch (value) {
-      // Navigation logic remains the same
       case 'signup_signin':
-        // Navigate to the authentication page (Sign Up/Sign In)
-        Navigator.pushNamed(context, '/auth');
-        // print('Selected: Sign Up/Sign In'); // Optional: keep for debugging
+        if (_isSignedIn) {
+          // If user is signed in, sign out and navigate to auth page
+          await _authService.signOut();
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Successfully signed out')),
+            );
+            Navigator.pushNamed(context, '/auth');
+          }
+        } else {
+          // If user is not signed in, navigate to auth page
+          Navigator.pushNamed(context, '/auth');
+        }
         break;
       case 'gallery_media':
         // Navigate to the gallery/media page
@@ -94,7 +112,7 @@ class _MyWidgetState extends State<ProjectsPage> with TickerProviderStateMixin {
         Navigator.pushNamed(context, '/donations');
         break;
 
-         case 'settings':
+      case 'settings':
         Navigator.pushNamed(context, '/settings');
         break;
       case 'contact_us':
@@ -123,7 +141,8 @@ class _MyWidgetState extends State<ProjectsPage> with TickerProviderStateMixin {
             backgroundColor: const Color.fromARGB(255, 4, 135, 242),
             centerTitle: true,
             title: FadeTransition(
-              opacity: _titleFadeSlideAnimationController, // Fix: Use the correct controller
+              opacity:
+                  _titleFadeSlideAnimationController, // Fix: Use the correct controller
               child: SlideTransition(
                 position: _slideAnimation,
                 child: const Text(
@@ -154,7 +173,8 @@ class _MyWidgetState extends State<ProjectsPage> with TickerProviderStateMixin {
                 ),
                 child: IconButton(
                   padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.volunteer_activism, color: Colors.blue, size: 24),
+                  icon: const Icon(Icons.volunteer_activism,
+                      color: Colors.blue, size: 24),
                   onPressed: () {
                     Navigator.pushNamed(context, '/donations');
                   },
@@ -163,87 +183,107 @@ class _MyWidgetState extends State<ProjectsPage> with TickerProviderStateMixin {
             ),
             actions: [
               Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: PopupMenuButton<String>(
-                      onSelected: _handleMenuSelection,
-                      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                        PopupMenuItem<String>(
-                          value: 'signup_signin',
-                          child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 300),
-                            style: TextStyle(
-                              color: _lastSelectedMenuItemValue == 'signup_signin' ? Colors.red : Colors.blue,
-                              // Add other consistent style properties if needed, e.g., fontSize
-                            ),
-                            child: const Text('Sign Up/Sign In'),
-                          ),
+                padding: const EdgeInsets.all(12.0),
+                child: PopupMenuButton<String>(
+                  onSelected: _handleMenuSelection,
+                  itemBuilder: (BuildContext context) =>
+                      <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'signup_signin',
+                      child: AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 300),
+                        style: TextStyle(
+                          color: _lastSelectedMenuItemValue == 'signup_signin'
+                              ? Colors.red
+                              : Colors.blue,
                         ),
-                        PopupMenuItem<String>(
-                          value: 'gallery_media',
-                          child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 300),
-                            style: TextStyle(
-                              color: _lastSelectedMenuItemValue == 'gallery_media' ? Colors.red : Colors.blue,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _isSignedIn ? Icons.logout : Icons.login,
+                              color:
+                                  _lastSelectedMenuItemValue == 'signup_signin'
+                                      ? Colors.red
+                                      : Colors.blue,
+                              size: 20,
                             ),
-                            child: const Text('Gallery/Media'),
-                          ),
+                            const SizedBox(width: 8),
+                            Text(_isSignedIn ? 'Sign Out' : 'Sign In'),
+                          ],
                         ),
-                        PopupMenuItem<String>(
-                          value: 'donate',
-                          child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 300),
-                            style: TextStyle(
-                              color: _lastSelectedMenuItemValue == 'donate' ? Colors.red : Colors.blue,
-                            ),
-                            child: const Text('Donate/Support Us'),
-                          ),
-                        ),
-
-                          PopupMenuItem<String>(
-                          value: 'settings',
-                          child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 300),
-                            style: TextStyle(
-                              color: _lastSelectedMenuItemValue == 'settings' ? Colors.red : Colors.blue,
-                            ),
-                            child: const Text('Settings'),
-                          ),
-                        ),
-                        
-                      
-                        PopupMenuItem<String>(
-                          value: 'contact_us',
-                          child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 300),
-                            style: TextStyle(
-                              color: _lastSelectedMenuItemValue == 'contact_us' ? Colors.red : Colors.blue,
-                            ),
-                            child: const Text('Contact Us'),
-                          ),
-                        ),
-                      ],
-                      tooltip: 'Open menu',
-                      child: RotationTransition(
-                        turns: _menuIconRotationAnimation,
-                        child: Container(
-                          height: 30,
-                          width: 30,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(30),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Colors.red,
-                                blurRadius: 5.0,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                            ),
-                          child: const Icon(Icons.menu, color: Colors.blue),
-                            ),
                       ),
-                          ),
                     ),
+                    PopupMenuItem<String>(
+                      value: 'gallery_media',
+                      child: AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 300),
+                        style: TextStyle(
+                          color: _lastSelectedMenuItemValue == 'gallery_media'
+                              ? Colors.red
+                              : Colors.blue,
+                        ),
+                        child: const Text('Gallery/Media'),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'donate',
+                      child: AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 300),
+                        style: TextStyle(
+                          color: _lastSelectedMenuItemValue == 'donate'
+                              ? Colors.red
+                              : Colors.blue,
+                        ),
+                        child: const Text('Donate/Support Us'),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'settings',
+                      child: AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 300),
+                        style: TextStyle(
+                          color: _lastSelectedMenuItemValue == 'settings'
+                              ? Colors.red
+                              : Colors.blue,
+                        ),
+                        child: const Text('Settings'),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'contact_us',
+                      child: AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 300),
+                        style: TextStyle(
+                          color: _lastSelectedMenuItemValue == 'contact_us'
+                              ? Colors.red
+                              : Colors.blue,
+                        ),
+                        child: const Text('Contact Us'),
+                      ),
+                    ),
+                  ],
+                  tooltip: 'Open menu',
+                  child: RotationTransition(
+                    turns: _menuIconRotationAnimation,
+                    child: Container(
+                      height: 30,
+                      width: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.red,
+                            blurRadius: 5.0,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.menu, color: Colors.blue),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -282,35 +322,55 @@ class _MyWidgetState extends State<ProjectsPage> with TickerProviderStateMixin {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.folder_open, size: 30, color: Colors.white),
-              Text('Projects', style: TextStyle(color: Colors.white, fontSize: 10, fontStyle: FontStyle.italic)),
+              Text('Projects',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic)),
             ],
           ),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.attach_money_rounded, size: 30, color: Colors.white),
-              Text('Donations', style: TextStyle(color: Colors.white, fontSize: 10, fontStyle: FontStyle.italic)),
+              Text('Donations',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic)),
             ],
           ),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.home, size: 30, color: Colors.white),
-              Text('Home', style: TextStyle(color: Colors.white, fontSize: 10, fontStyle: FontStyle.italic)),
+              Text('Home',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic)),
             ],
           ),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(FontAwesomeIcons.peopleGroup, size: 30, color: Colors.white),
-              Text('Community', style: TextStyle(color: Colors.white, fontSize: 10, fontStyle: FontStyle.italic)),
+              Text('Community',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic)),
             ],
           ),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.person, size: 30, color: Colors.white),
-              Text('Profile', style: TextStyle(color: Colors.white, fontSize: 10, fontStyle: FontStyle.italic)),
+              Text('Profile',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic)),
             ],
           ),
         ],
@@ -375,15 +435,18 @@ class _MyWidgetState extends State<ProjectsPage> with TickerProviderStateMixin {
   List<Widget> buildOngoingProjects() {
     return [
       sectionTitle("Education"),
-      projectCard("Empowering Minds", "Providing quality education to underprivileged children."),
-      projectCard("Literacy for All", "Promoting literacy among adults and youth."),
+      projectCard("Empowering Minds",
+          "Providing quality education to underprivileged children."),
+      projectCard(
+          "Literacy for All", "Promoting literacy among adults and youth."),
     ];
   }
 
   List<Widget> buildCompletedProjects() {
     return [
       sectionTitle("Community"),
-      projectCard("Completed Project A", "This project has been successfully completed."),
+      projectCard("Completed Project A",
+          "This project has been successfully completed."),
       projectCard("Completed Project B", "Another project completed recently."),
     ];
   }

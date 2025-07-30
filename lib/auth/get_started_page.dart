@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:elim_trust_2/services/auth_service.dart';
 
 class GetStartedPage extends StatefulWidget {
   const GetStartedPage({super.key});
@@ -21,6 +22,7 @@ class _GetStartedPageState extends State<GetStartedPage> {
   bool _isSigningInWithGoogle = false;
   bool _isSigningInWithApple = false;
   bool _isLoading = false;
+  final AuthService _authService = AuthService();
 
   @override
   void dispose() {
@@ -137,19 +139,51 @@ class _GetStartedPageState extends State<GetStartedPage> {
       });
 
       try {
-        // Create user with email and password
-        final credential =
-            await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
+        // Create user with email and password using the AuthService
+        final credential = await _authService.createUserWithEmailAndPassword(
+          _emailController.text.trim(),
+          _passwordController.text,
         );
 
         if (credential.user != null) {
           // Update the user's display name
           await credential.user!.updateDisplayName(_nameController.text.trim());
 
+          // Send email verification
+          await _authService.sendEmailVerification();
           if (mounted) {
-            Navigator.pushReplacementNamed(context, '/home');
+            // Show success dialog
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: const Text('Verify Your Email'),
+                  content: SingleChildScrollView(
+                    child: ListBody(
+                      children: [
+                        const Text('A verification email has been sent to:'),
+                        Text(
+                          _emailController.text.trim(),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                            'Please verify your email address to sign in.'),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      child: const Text('OK'),
+                      onPressed: () {
+                        Navigator.of(context).pushReplacementNamed('/signin');
+                      },
+                    ),
+                  ],
+                );
+              },
+            );
           }
         }
       } on FirebaseAuthException catch (e) {
@@ -411,10 +445,10 @@ class _GetStartedPageState extends State<GetStartedPage> {
                                   color: Colors.blue.shade700,
                                 ),
                               )
-                            : Icon(
-                                Icons.email,
-                                size: 24,
-                                color: Colors.blue.shade700,
+                            : Image.asset(
+                                'images/google.png',
+                                height: 24,
+                                width: 24,
                               ),
                         label: const Text('Google'),
                       ),
@@ -439,7 +473,11 @@ class _GetStartedPageState extends State<GetStartedPage> {
                                   color: Colors.black,
                                 ),
                               )
-                            : const Icon(Icons.apple, size: 24),
+                            : Image.asset(
+                                'images/apple-logo.png',
+                                height: 24,
+                                width: 24,
+                              ),
                         label: const Text('Apple'),
                       ),
                     ],

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import '../services/auth_service.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -18,6 +18,7 @@ class _SignInPageState extends State<SignInPage> {
   bool _isLoading = false;
   bool _isSigningInWithGoogle = false;
   bool _isSigningInWithApple = false;
+  final AuthService _authService = AuthService();
 
   Future<void> _handleGoogleSignIn() async {
     if (_isSigningInWithGoogle) return;
@@ -27,18 +28,7 @@ class _SignInPageState extends State<SignInPage> {
     });
 
     try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return;
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final UserCredential userCredential =
-          await FirebaseAuth.instance.signInWithCredential(credential);
+      await _authService.signInWithGoogle();
 
       // final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       // Handle authentication result
@@ -108,64 +98,156 @@ class _SignInPageState extends State<SignInPage> {
       });
 
       try {
-        final credential =
-            await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
+        final credential = await _authService.signInWithEmailAndPassword(
+          _emailController.text.trim(),
+          _passwordController.text,
         );
 
-        if (credential.user != null) {
-          // Successfully signed in
+        // Check email verification
+        if (credential.user != null && !credential.user!.emailVerified) {
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: const Text('Email Not Verified'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Please verify your email to continue.'),
+                      const SizedBox(height: 16),
+                      TextButton(
+                        child: const Text('Resend Verification Email'),
+                        onPressed: () async {
+                          try {
+                            await credential.user!.sendEmailVerification();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Verification email sent!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content:
+                                      Text('Error sending verification email'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      child: const Text('OK'),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ],
+                );
+              },
+            );
+            return;
+          }
+        }
+
+        if (credential.user != null && credential.user!.emailVerified) {
+          // Successfully signed in and email is verified
           if (mounted) {
             Navigator.pushReplacementNamed(context, '/home');
           }
         }
       } on FirebaseAuthException catch (e) {
-        String errorMessage = 'An error occurred';
-        String actionMessage = '';
+        String message;
         Color backgroundColor = Colors.red.shade700;
 
-        if (e.code == 'user-not-found') {
-          errorMessage = '⚠️ Account Not Found';
-          actionMessage =
-              'It looks like you don\'t have an account yet. Would you like to create one?';
-          backgroundColor = Colors.blue.shade700;
-        } else if (e.code == 'wrong-password') {
-          errorMessage = '🔐 Incorrect Password';
-          actionMessage = 'Please check your password and try again.';
-        } else if (e.code == 'invalid-email') {
-          errorMessage = '📧 Invalid Email';
-          actionMessage = 'Please enter a valid email address.';
+        switch (e.code) {
+          case 'user-not-found':
+            message =
+                '🚫 Account not found. Create a new account to get started!';
+            backgroundColor = Colors.orange.shade700;
+          case 'wrong-password':
+            message = '🔐 Incorrect password';
+          case 'invalid-email':
+            message = '📧 Invalid email format';
+          case 'too-many-requests':
+            message =
+                '⚠️ Access temporarily disabled due to many failed attempts. '
+                'Please try again after a few minutes or reset your password.';
+            backgroundColor = Colors.orange.shade800;
+            // Show a dialog with more detailed information
+            if (mounted) {
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Text('Too Many Failed Attempts'),
+                    content: const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            'Your account has been temporarily disabled due to too many failed login attempts.'),
+                        SizedBox(height: 16),
+                        Text('You can:'),
+                        SizedBox(height: 8),
+                        Text('• Wait a few minutes and try again'),
+                        Text('• Reset your password'),
+                        Text('• Contact support if the issue persists'),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        child: const Text('Reset Password'),
+                        onPressed: () {
+                          // TODO: Implement password reset
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                      TextButton(
+                        child: const Text('OK'),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                    ],
+                  );
+                },
+              );
+            }
+          default:
+            message = 'Authentication failed';
         }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+              content: Row(
                 children: [
-                  Text(
-                    errorMessage,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (actionMessage.isNotEmpty) const SizedBox(height: 4),
-                  if (actionMessage.isNotEmpty)
-                    Text(
-                      actionMessage,
+                  Expanded(
+                    child: Text(
+                      message,
                       style: const TextStyle(fontSize: 14),
                     ),
+                  ),
                 ],
               ),
               backgroundColor: backgroundColor,
               behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 4),
+              duration: const Duration(seconds: 3),
               action: e.code == 'user-not-found'
                   ? SnackBarAction(
-                      label: 'Create Account',
+                      label: 'Sign Up',
                       textColor: Colors.white,
                       onPressed: () {
                         Navigator.pushReplacementNamed(context, '/get-started');
@@ -371,10 +453,10 @@ class _SignInPageState extends State<SignInPage> {
                                   color: Colors.blue.shade700,
                                 ),
                               )
-                            : Icon(
-                                Icons.email,
-                                size: 24,
-                                color: Colors.blue.shade700,
+                            : Image.asset(
+                                'images/google.png',
+                                height: 24,
+                                width: 24,
                               ),
                         label: const Text('Google'),
                       ),
@@ -399,7 +481,11 @@ class _SignInPageState extends State<SignInPage> {
                                   color: Colors.black,
                                 ),
                               )
-                            : const Icon(Icons.apple, size: 24),
+                            : Image.asset(
+                                'images/apple-logo.png',
+                                height: 24,
+                                width: 24,
+                              ),
                         label: const Text('Apple'),
                       ),
                     ],
