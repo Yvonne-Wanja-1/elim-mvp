@@ -157,30 +157,169 @@ class _GetStartedPageState extends State<GetStartedPage> {
               context: context,
               barrierDismissible: false,
               builder: (BuildContext context) {
-                return AlertDialog(
-                  title: const Text('Verify Your Email'),
-                  content: SingleChildScrollView(
-                    child: ListBody(
-                      children: [
-                        const Text('A verification email has been sent to:'),
-                        Text(
-                          _emailController.text.trim(),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                bool isResending = false;
+                bool isChecking = false;
+
+                return StatefulBuilder(
+                  builder: (context, setState) {
+                    return AlertDialog(
+                      title: const Text('Verify Your Email'),
+                      content: SingleChildScrollView(
+                        child: ListBody(
+                          children: [
+                            const Text(
+                              'To complete your registration, please verify your email:',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _emailController.text.trim(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.blue,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Steps to verify your email:',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              '1. Check your email inbox (and spam folder)\n'
+                              '2. Open the verification email from Elim Trust\n'
+                              '3. Click the verification link in the email\n'
+                              '4. Return here and click "Check Verification Status"',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Didn\'t receive the email?',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                minimumSize: const Size(double.infinity, 40),
+                              ),
+                              onPressed: isResending
+                                  ? null
+                                  : () async {
+                                      setState(() => isResending = true);
+                                      try {
+                                        await _authService
+                                            .sendEmailVerification();
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                  'New verification email sent! Please check your inbox.'),
+                                              backgroundColor: Colors.green,
+                                            ),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(e
+                                                      is FirebaseAuthException
+                                                  ? e.message ??
+                                                      'Error sending verification email'
+                                                  : 'Error sending verification email'),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                        }
+                                      } finally {
+                                        setState(() => isResending = false);
+                                      }
+                                    },
+                              child: isResending
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text('Resend Verification Email'),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        const Text(
-                            'Please verify your email address to sign in.'),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: isChecking
+                              ? null
+                              : () async {
+                                  setState(() => isChecking = true);
+                                  try {
+                                    await _authService.reloadUser();
+                                    final isVerified =
+                                        _authService.isEmailVerified;
+
+                                    if (isVerified) {
+                                      if (mounted) {
+                                        Navigator.of(context)
+                                            .pushReplacementNamed('/home');
+                                      }
+                                    } else {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Email not verified yet. Please check your email and click the verification link.',
+                                              style: TextStyle(fontSize: 14),
+                                            ),
+                                            backgroundColor: Colors.orange,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                              'Error checking verification status'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  } finally {
+                                    setState(() => isChecking = false);
+                                  }
+                                },
+                          child: isChecking
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Check Verification Status'),
+                        ),
+                        TextButton(
+                          child: const Text('Sign In'),
+                          onPressed: () {
+                            Navigator.of(context)
+                                .pushReplacementNamed('/signin');
+                          },
+                        ),
                       ],
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      child: const Text('OK'),
-                      onPressed: () {
-                        Navigator.of(context).pushReplacementNamed('/signin');
-                      },
-                    ),
-                  ],
+                    );
+                  },
                 );
               },
             );

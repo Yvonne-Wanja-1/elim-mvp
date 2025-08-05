@@ -105,55 +105,148 @@ class _SignInPageState extends State<SignInPage> {
 
         // Check email verification
         if (credential.user != null && !credential.user!.emailVerified) {
+          // Sign out but keep the user object for resending verification
+          final user = credential.user;
           await FirebaseAuth.instance.signOut();
+
           if (mounted) {
             showDialog(
               context: context,
+              barrierDismissible: false,
               builder: (BuildContext context) {
-                return AlertDialog(
-                  title: const Text('Email Not Verified'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Please verify your email to continue.'),
-                      const SizedBox(height: 16),
-                      TextButton(
-                        child: const Text('Resend Verification Email'),
-                        onPressed: () async {
-                          try {
-                            await credential.user!.sendEmailVerification();
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Verification email sent!'),
-                                  backgroundColor: Colors.green,
+                bool isResending = false;
+                return StatefulBuilder(
+                  builder: (context, setState) {
+                    return AlertDialog(
+                      title: const Text('Email Not Verified'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Please verify your email (${user?.email}) to continue.',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            '1. Check your email for the verification link\n'
+                            '2. Click the link to verify your email\n'
+                            '3. Then click "Check Verification Status" below',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                  ),
+                                  onPressed: isResending
+                                      ? null
+                                      : () async {
+                                          setState(() => isResending = true);
+                                          try {
+                                            await _authService
+                                                .sendEmailVerification(
+                                                    user: user);
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                      'Verification email sent! Please check your inbox.'),
+                                                  backgroundColor: Colors.green,
+                                                ),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(e
+                                                          is FirebaseAuthException
+                                                      ? e.message ??
+                                                          'Error sending verification email'
+                                                      : 'Error sending verification email'),
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                              );
+                                            }
+                                          } finally {
+                                            setState(() => isResending = false);
+                                          }
+                                        },
+                                  child: isResending
+                                      ? const SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text('Resend Verification Email'),
                                 ),
-                              );
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content:
-                                      Text('Error sending verification email'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        },
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      child: const Text('OK'),
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                      },
-                    ),
-                  ],
+                      actions: [
+                        TextButton(
+                          child: const Text('Check Verification Status'),
+                          onPressed: () async {
+                            try {
+                              // Try to sign in again to check verification status
+                              final newCredential =
+                                  await _authService.signInWithEmailAndPassword(
+                                _emailController.text.trim(),
+                                _passwordController.text,
+                              );
+
+                              if (newCredential.user?.emailVerified == true) {
+                                if (mounted) {
+                                  Navigator.of(context).pop(); // Close dialog
+                                  Navigator.pushReplacementNamed(
+                                      context, '/home');
+                                }
+                              } else {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          'Email is not verified yet. Please check your email and click the verification link.'),
+                                      backgroundColor: Colors.orange,
+                                    ),
+                                  );
+                                }
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Error checking verification status. Please try again.'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                        TextButton(
+                          child: const Text('Cancel'),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                      ],
+                    );
+                  },
                 );
               },
             );

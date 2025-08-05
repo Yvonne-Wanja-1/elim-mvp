@@ -20,12 +20,16 @@ if (flutterRoot == null) {
 
 android {
     namespace "com.example.elim_mvp"
-    compileSdkVersion 34  // Update this
+    compileSdkVersion 35
     ndkVersion "27.0.12077973"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
     }
 
     defaultConfig {
