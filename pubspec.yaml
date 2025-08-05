@@ -25,7 +25,7 @@ dependencies:
   image_picker: ^1.1.2
   image_cropper: ^9.1.0
   google_sign_in: ^6.2.1
-  sign_in_with_apple: ^5.0.0
+  sign_in_with_apple: ^7.0.1
   crypto: ^3.0.3
 
   video_player: ^2.10.0
