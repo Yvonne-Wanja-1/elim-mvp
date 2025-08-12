@@ -145,12 +145,14 @@ class _GetStartedPageState extends State<GetStartedPage> {
           _passwordController.text,
         );
 
-        if (credential.user != null) {
+        if (credential['user'] != null) {
           // Update the user's display name
-          await credential.user!.updateDisplayName(_nameController.text.trim());
+          await credential['user']!
+              .updateDisplayName(_nameController.text.trim());
 
-          // Send email verification
-          await _authService.sendEmailVerification();
+          // Now sign out the user
+          await FirebaseAuth.instance.signOut();
+
           if (mounted) {
             // Show success dialog
             showDialog(

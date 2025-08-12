@@ -78,7 +78,7 @@ class AuthService {
   bool get isEmailVerified => currentUser?.emailVerified ?? false;
 
   // Create user with email and password
-  Future<UserCredential> createUserWithEmailAndPassword(
+  Future<Map<String, dynamic>> createUserWithEmailAndPassword(
       String email, String password) async {
     try {
       // First check if the email is already in use
@@ -91,26 +91,50 @@ class AuthService {
         );
       }
 
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      UserCredential? credential;
+      try {
+        // Create the user account
+        credential = await _auth.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
 
-      // Immediately send verification email
-      if (credential.user != null) {
-        try {
-          // Try to send verification email directly
-          await credential.user!.sendEmailVerification();
-          // Store the initial send time
-          _lastEmailSentTime[credential.user!.email!] = DateTime.now();
-        } catch (e) {
-          print('Error sending verification email: $e');
-          // Don't delete the user, just log the error and continue
-          // The user can request another verification email later
+        if (credential.user != null) {
+          try {
+            // Try to send verification email
+            await credential.user!.sendEmailVerification();
+            // Store the initial send time
+            _lastEmailSentTime[credential.user!.email!] = DateTime.now();
+
+            // Return success with verification needed message
+            return {
+              'credential': credential,
+              'message':
+                  'Please check your email to verify your account before signing in.',
+              'user': credential.user
+            };
+          } catch (e) {
+            // If sending verification email fails, delete the user account
+            await credential.user?.delete();
+            throw FirebaseAuthException(
+              code: 'verification-email-failed',
+              message: 'Failed to send verification email. Please try again.',
+            );
+          }
         }
-      }
 
-      return credential;
+        throw FirebaseAuthException(
+          code: 'user-creation-failed',
+          message: 'Failed to create account. Please try again.',
+        );
+      } catch (e) {
+        // If any error occurs after creating the user but before completing setup,
+        // try to clean up by deleting the user
+        if (credential?.user != null) {
+          await credential!.user!.delete();
+        }
+        rethrow;
+      }
     } catch (e) {
       rethrow;
     }
@@ -125,9 +149,16 @@ class AuthService {
         password: password,
       );
 
-      // Check if email is verified, but don't prevent sign in
+      // Force email verification check
       if (!credential.user!.emailVerified) {
-        print('Warning: Email not verified for user ${credential.user!.email}');
+        // Sign out the user immediately
+        await _auth.signOut();
+
+        throw FirebaseAuthException(
+          code: 'email-not-verified',
+          message:
+              'Please verify your email before signing in. Check your inbox for the verification link.',
+        );
       }
       return credential;
     } on FirebaseAuthException catch (e) {

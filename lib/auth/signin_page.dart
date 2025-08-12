@@ -198,45 +198,59 @@ class _SignInPageState extends State<SignInPage> {
                       ),
                       actions: [
                         TextButton(
-                          child: const Text('Check Verification Status'),
-                          onPressed: () async {
-                            try {
-                              // Try to sign in again to check verification status
-                              final newCredential =
-                                  await _authService.signInWithEmailAndPassword(
-                                _emailController.text.trim(),
-                                _passwordController.text,
-                              );
-
-                              if (newCredential.user?.emailVerified == true) {
-                                if (mounted) {
-                                  Navigator.of(context).pop(); // Close dialog
-                                  Navigator.pushReplacementNamed(
-                                      context, '/home');
-                                }
-                              } else {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                          'Email is not verified yet. Please check your email and click the verification link.'),
-                                      backgroundColor: Colors.orange,
-                                    ),
-                                  );
-                                }
-                              }
-                            } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                        'Error checking verification status. Please try again.'),
-                                    backgroundColor: Colors.red,
+                          child: isResending
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
                                   ),
-                                );
-                              }
-                            }
-                          },
+                                )
+                              : const Text('Check Verification Status'),
+                          onPressed: isResending
+                              ? null
+                              : () async {
+                                  try {
+                                    // Try to sign in again to check verification status
+                                    final newCredential = await _authService
+                                        .signInWithEmailAndPassword(
+                                      _emailController.text.trim(),
+                                      _passwordController.text,
+                                    );
+
+                                    if (newCredential.user?.emailVerified ==
+                                        true) {
+                                      if (mounted) {
+                                        Navigator.of(context)
+                                            .pop(); // Close dialog
+                                        Navigator.pushReplacementNamed(
+                                            context, '/home');
+                                      }
+                                    } else {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                                'Email is not verified yet. Please check your email and click the verification link.'),
+                                            backgroundColor: Colors.orange,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                              'Error checking verification status. Please try again.'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
                         ),
                         TextButton(
                           child: const Text('Cancel'),
